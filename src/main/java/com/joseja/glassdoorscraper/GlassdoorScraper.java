@@ -6,6 +6,7 @@
 package com.joseja.glassdoorscraper;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
@@ -15,6 +16,7 @@ import java.util.logging.Logger;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.remote.DesiredCapabilities;
 
 /**
  *
@@ -44,15 +46,15 @@ public class GlassdoorScraper {
     private static int getNumberOfPages(ChromeDriver driver) throws NumberFormatException {
         final int NUM_COMPANIES = Integer.parseInt(
                 driver.findElementByXPath("//*[@id=\"MainCol\"]/div[1]/header/div[1]/strong[3]")
-                        .getText()
-                        .replace(",", ""));
+                .getText()
+                .replace(",", ""));
         final int COMPANIES_PER_PAGE = 10;
         int NUM_PAGES = calculateNumberOfPages(NUM_COMPANIES, COMPANIES_PER_PAGE);
         return NUM_PAGES;
     }
 
     private static int calculateNumberOfPages(final int NUM_COMPANIES,
-                                        final int COMPANIES_PER_PAGE) {
+                                              final int COMPANIES_PER_PAGE) {
         final int NUM_PAGES;
         if (NUM_COMPANIES % COMPANIES_PER_PAGE == 0) {
             NUM_PAGES = NUM_COMPANIES / COMPANIES_PER_PAGE;
@@ -63,9 +65,11 @@ public class GlassdoorScraper {
     }
 
     private static ChromeDriver initializeDriver() {
+        DesiredCapabilities capabilities = DesiredCapabilities.chrome();
+        capabilities.setCapability("chrome.switches", Arrays.asList("--proxy-server=http://127.0.0.1:8118"));
         // Set path to Chrome web driver.
         System.setProperty("webdriver.chrome.driver", "C:\\MyPrograms\\chromedriver.exe");
-        ChromeDriver driver = new ChromeDriver();
+        ChromeDriver driver = new ChromeDriver(capabilities);
         // Set implicit wait.
         driver.manage().timeouts().implicitlyWait(10, TimeUnit.SECONDS);
         return driver;
@@ -202,6 +206,6 @@ public class GlassdoorScraper {
         } catch (InterruptedException ex) {
             Logger.getLogger(GlassdoorScraper.class.getName()).log(Level.SEVERE, null, ex);
         }
-        
+
     }
 }
