@@ -5,13 +5,10 @@
  */
 package com.joseja.glassdoorscraper;
 
+import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Map;
-import java.util.Random;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeDriver;
@@ -22,44 +19,60 @@ import org.openqa.selenium.chrome.ChromeDriver;
  */
 public class GlassdoorScraper {
 
-    public static Map<String, ArrayList<Float>> companies = new ConcurrentHashMap<>();
+    public static TreeMap<String, ArrayList<Float>> companies = new TreeMap<>();
+    private static int NUM_PAGES;
+    private static ExcelManager excel;
 
-    public static void main(String[] args) throws InterruptedException {
+    public static void main(String[] args) throws InterruptedException, IOException {
         ChromeDriver driver = initializeDriver();
-        // Get the webpage (spanish companies ordered by rating - Page1).
-        driver.get("https://www.glassdoor.com/Reviews/spain-reviews-SRCH_IL.0,5_IN219_SDOR.htm");
+        try {
+            excel = new ExcelManager("compañias");
+            // Get the webpage (spanish companies ordered by rating - Page1).
+            driver.get("https://www.glassdoor.com/Reviews/spain-reviews-SRCH_IL.0,5_IN219_SDOR.htm");
 
-        final int NUM_PAGES = getNumberOfPages(driver);
+            updateNumberOfPages(driver);
 
-        for (int i = 0; i < (NUM_PAGES - 1); i++) {
-            processPage(driver);
-            advancePage(driver);
+            int page = (excel.getLastRowIndex()-1) / 10;
+            
+            System.out.println("PAGE: " + page);
+
+            for (int i = page; i < (NUM_PAGES - 1); i++) {
+                jumpToPage(driver, page);
+                processPage(driver);
+                advancePage(driver);
+            }
+        } catch (Exception exception) {
+            System.out.println("Sistema de seguridad activado: Guardando estado...");
+        } finally {
+            boolean isSaved = excel.write(companies);
+            if (isSaved) {
+                System.out.println("Estado guardado correctamente");
+            } else {
+                System.out.println("Hubo fallos al guardar.");
+            }
+            // Wait 10 seconds before shuting down the driver.
+            System.out.println("Terminando programa");
+            TimeUnit.SECONDS.sleep(10);
+            driver.quit();
         }
-
-        // Wait 10 seconds before shuting down the driver.
-        TimeUnit.SECONDS.sleep(10);
-        driver.quit();
     }
 
-    private static int getNumberOfPages(ChromeDriver driver) throws NumberFormatException {
+    private static void updateNumberOfPages(ChromeDriver driver) throws NumberFormatException {
         final int NUM_COMPANIES = Integer.parseInt(
                 driver.findElementByXPath("//*[@id=\"MainCol\"]/div[1]/header/div[1]/strong[3]")
-                        .getText()
-                        .replace(",", ""));
+                .getText()
+                .replace(",", ""));
         final int COMPANIES_PER_PAGE = 10;
-        int NUM_PAGES = calculateNumberOfPages(NUM_COMPANIES, COMPANIES_PER_PAGE);
-        return NUM_PAGES;
+        calculateNumberOfPages(NUM_COMPANIES, COMPANIES_PER_PAGE);
     }
 
-    private static int calculateNumberOfPages(final int NUM_COMPANIES,
-                                        final int COMPANIES_PER_PAGE) {
-        final int NUM_PAGES;
+    private static void calculateNumberOfPages(final int NUM_COMPANIES,
+                                               final int COMPANIES_PER_PAGE) {
         if (NUM_COMPANIES % COMPANIES_PER_PAGE == 0) {
             NUM_PAGES = NUM_COMPANIES / COMPANIES_PER_PAGE;
         } else {
             NUM_PAGES = (NUM_COMPANIES / COMPANIES_PER_PAGE) + 1;
         }
-        return NUM_PAGES;
     }
 
     private static ChromeDriver initializeDriver() {
@@ -67,7 +80,7 @@ public class GlassdoorScraper {
         System.setProperty("webdriver.chrome.driver", "C:\\MyPrograms\\chromedriver.exe");
         ChromeDriver driver = new ChromeDriver();
         // Set implicit wait.
-        driver.manage().timeouts().implicitlyWait(10, TimeUnit.SECONDS);
+        driver.manage().timeouts().implicitlyWait(20, TimeUnit.SECONDS);
         return driver;
     }
 
@@ -86,21 +99,31 @@ public class GlassdoorScraper {
      *
      * @param driver
      */
-    private static void processPage(ChromeDriver driver) {
+    private static void processPage(ChromeDriver driver) throws IOException {
         // Get all companies links from the current page.
         ArrayList<WebElement> companiesLinks = new ArrayList<>();
         getCompaniesLinks(driver, companiesLinks);
         int linksNumber = companiesLinks.size();
-        for (int i = 0; i < linksNumber; i++) {
+        int currentCompany = (excel.getLastRowIndex()-1) % 10;
+        for (int i = currentCompany; i < linksNumber; i++) {
             String companyName = companiesLinks.get(i).getText();
-            beHuman(driver);
             companiesLinks.get(i).click();  // Enter selected company page.
+            getReviews(driver, companyName);
             getDetailedRatings(driver, companyName);
             printDetailedRatings(companyName);
-            beHuman(driver);
             driver.navigate().back();
             getCompaniesLinks(driver, companiesLinks);  // Update companies links.
         }
+    }
+
+    private static void getReviews(ChromeDriver driver, String company) {
+        String numberOfReviews = driver.findElementByXPath("//*[@id=\"EIHdrModule\"]/div[2]/div/a[2]/span[1]")
+                .getText()
+                .replace(".", "")
+                .replace("k", "00");
+        ArrayList<Float> info = new ArrayList<>();
+        info.add(Float.parseFloat(numberOfReviews));
+        companies.put(company, info);
     }
 
     /**
@@ -112,14 +135,14 @@ public class GlassdoorScraper {
     private static void getDetailedRatings(ChromeDriver driver, String company) {
         // Open detailed ratings window.
         driver.findElement(By.cssSelector("span[href*='ratingsDetails']")).click();
-        ArrayList<Float> ratings = new ArrayList<>();
-        ratings.add(getRating1(driver));
-        ratings.add(getRating2(driver));
-        ratings.add(getRating3(driver));
-        ratings.add(getRating4(driver));
-        ratings.add(getRating5(driver));
-        ratings.add(getRating6(driver));
-        companies.put(company, ratings);  // Save company ratings.
+        ArrayList<Float> info = companies.get(company);
+        info.add(getRating1(driver));
+        info.add(getRating2(driver));
+        info.add(getRating3(driver));
+        info.add(getRating4(driver));
+        info.add(getRating5(driver));
+        info.add(getRating6(driver));
+        companies.put(company, info);  // Save company ratings.
     }
 
     private static void printDetailedRatings(String company) {
@@ -127,12 +150,12 @@ public class GlassdoorScraper {
         if (detailedRatings != null) {
             System.out.println("");
             System.out.println("Detailed ratings of -" + company + "- ");
-            System.out.println("    - Overall: " + detailedRatings.get(0));
-            System.out.println("    - Culture & Values: " + detailedRatings.get(1));
-            System.out.println("    - Work/Life Balance: " + detailedRatings.get(2));
-            System.out.println("    - Senior Management: " + detailedRatings.get(3));
-            System.out.println("    - Comp & Benefits: " + detailedRatings.get(4));
-            System.out.println("    - Career Opportunities: " + detailedRatings.get(5));
+            System.out.println("    - Overall: " + detailedRatings.get(1));
+            System.out.println("    - Culture & Values: " + detailedRatings.get(2));
+            System.out.println("    - Work/Life Balance: " + detailedRatings.get(3));
+            System.out.println("    - Senior Management: " + detailedRatings.get(4));
+            System.out.println("    - Comp & Benefits: " + detailedRatings.get(5));
+            System.out.println("    - Career Opportunities: " + detailedRatings.get(6));
             System.out.println("");
         }
     }
@@ -192,16 +215,9 @@ public class GlassdoorScraper {
         }
     }
 
-    /**
-     * Simulate human behavior to evade the anti-bot system.
-     */
-    private static void beHuman(ChromeDriver driver) {
-        Random rand = new Random();
-        try {
-            TimeUnit.SECONDS.sleep(Math.abs(rand.nextInt() % 5));  // Wait for random seconds.
-        } catch (InterruptedException ex) {
-            Logger.getLogger(GlassdoorScraper.class.getName()).log(Level.SEVERE, null, ex);
+    private static void jumpToPage(ChromeDriver driver, int page) {
+        if (page != 0) {
+            driver.get("https://www.glassdoor.com/Reviews/spain-reviews-SRCH_IL.0,5_IN219_SDOR_IP" + (page+1) + ".htm");
         }
-        
     }
 }
