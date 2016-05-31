@@ -9,6 +9,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeDriver;
@@ -18,93 +20,80 @@ import org.openqa.selenium.chrome.ChromeDriver;
  * @author Joseja
  */
 public class GlassdoorScraper {
-
-    public static TreeMap<String, ArrayList<Float>> companies = new TreeMap<>();
-    private static int NUM_PAGES;
+    
     private static ExcelManager excel;
+    private static ChromeDriver driver;
+    private static TreeMap<String, ArrayList<Float>> companies = new TreeMap<>();
+    
+    static final int COMPANIES_PER_PAGE = 10;
 
-    public static void main(String[] args) throws InterruptedException, IOException {
-        ChromeDriver driver = initializeDriver();
-        try {
-            excel = new ExcelManager("compañias");
-            // Get the webpage (spanish companies ordered by rating - Page1).
-            driver.get("https://www.glassdoor.com/Reviews/spain-reviews-SRCH_IL.0,5_IN219_SDOR.htm");
+    public static void main(String[] args) throws InterruptedException {
+        driver = initializeDriver();
+        Spider spider = new Spider(driver);
+        excel  = initializeExcelManager();
+        
+        // Go to the webpage (spanish companies ordered by popularity).
+        spider.enterPage("https://www.glassdoor.com/Reviews/spain-reviews-SRCH_IL.0,5_IN219.htm");
 
-            updateNumberOfPages(driver);
 
-            int page = (excel.getLastRowIndex()-1) / 10;
-            
-            System.out.println("PAGE: " + page);
+        int numPages = spider.getTotalPages();
 
-            for (int i = page; i < (NUM_PAGES - 1); i++) {
-                jumpToPage(driver, page);
-                processPage(driver);
-                advancePage(driver);
-            }
-        } catch (Exception exception) {
-            System.out.println("Sistema de seguridad activado: Guardando estado...");
-        } finally {
-            boolean isSaved = excel.write(companies);
-            if (isSaved) {
-                System.out.println("Estado guardado correctamente");
-            } else {
-                System.out.println("Hubo fallos al guardar.");
-            }
-            // Wait 10 seconds before shuting down the driver.
-            System.out.println("Terminando programa");
-            TimeUnit.SECONDS.sleep(10);
-            driver.quit();
+        int currentPage = excel.getLastRowNum() / COMPANIES_PER_PAGE;
+
+        for (int i = currentPage; i < numPages; i++) {
+            Spider.jumpToPage(driver, currentPage);
+            processPage(driver);
+            Spider.advancePage(driver);
         }
-    }
 
-    private static void updateNumberOfPages(ChromeDriver driver) throws NumberFormatException {
-        final int NUM_COMPANIES = Integer.parseInt(
-                driver.findElementByXPath("//*[@id=\"MainCol\"]/div[1]/header/div[1]/strong[3]")
-                .getText()
-                .replace(",", ""));
-        final int COMPANIES_PER_PAGE = 10;
-        calculateNumberOfPages(NUM_COMPANIES, COMPANIES_PER_PAGE);
-    }
-
-    private static void calculateNumberOfPages(final int NUM_COMPANIES,
-                                               final int COMPANIES_PER_PAGE) {
-        if (NUM_COMPANIES % COMPANIES_PER_PAGE == 0) {
-            NUM_PAGES = NUM_COMPANIES / COMPANIES_PER_PAGE;
+        boolean isSaved = excel.save(companies);
+        if (isSaved) {
+            System.out.println("Estado del fichero de datos guardado correctamente");
         } else {
-            NUM_PAGES = (NUM_COMPANIES / COMPANIES_PER_PAGE) + 1;
+            System.out.println("Hubo fallos al guardar.");
         }
+        // Wait 10 seconds before shuting down the driver.
+        System.out.println("Programa terminado");
+        TimeUnit.SECONDS.sleep(10);
+        driver.quit();
+
+    }
+
+    private static ExcelManager initializeExcelManager() {
+        ExcelManager newExcelManager = null;
+        try {
+            newExcelManager = new ExcelManager("compañias");
+            return newExcelManager;
+        } catch (IOException ex) {
+            System.err.println("Error en el modulo ExcelManager: ");
+            Logger.getLogger(GlassdoorScraper.class.getName()).log(Level.SEVERE, null, ex);
+            System.err.println("Fin del log.");
+        }
+        return newExcelManager;
     }
 
     private static ChromeDriver initializeDriver() {
         // Set path to Chrome web driver.
-        System.setProperty("webdriver.chrome.driver", "C:\\MyPrograms\\chromedriver.exe");
+        System.setProperty("webdriver.chrome.driver",
+                           "/home/joseja/Documents/NetBeansProjects/glassdoorScraper/chromedriver");
         ChromeDriver driver = new ChromeDriver();
         // Set implicit wait.
         driver.manage().timeouts().implicitlyWait(20, TimeUnit.SECONDS);
         return driver;
     }
 
-    /**
-     * Go to next page.
-     *
-     * @param driver
-     */
-    private static void advancePage(ChromeDriver driver) {
-        WebElement nextPage = driver.findElement(By.className("next"));
-        nextPage.click();  // Go to next page.
-    }
 
     /**
      * Extract data from every company in the current page (10 by default).
      *
      * @param driver
      */
-    private static void processPage(ChromeDriver driver) throws IOException {
+    private static void processPage(ChromeDriver driver) {
         // Get all companies links from the current page.
         ArrayList<WebElement> companiesLinks = new ArrayList<>();
-        getCompaniesLinks(driver, companiesLinks);
+        findCompaniesLinks(driver, companiesLinks);
         int linksNumber = companiesLinks.size();
-        int currentCompany = (excel.getLastRowIndex()-1) % 10;
+        int currentCompany = (excel.getLastRowNum() - 1) % 10;
         for (int i = currentCompany; i < linksNumber; i++) {
             String companyName = companiesLinks.get(i).getText();
             companiesLinks.get(i).click();  // Enter selected company page.
@@ -112,7 +101,7 @@ public class GlassdoorScraper {
             getDetailedRatings(driver, companyName);
             printDetailedRatings(companyName);
             driver.navigate().back();
-            getCompaniesLinks(driver, companiesLinks);  // Update companies links.
+            findCompaniesLinks(driver, companiesLinks);  // Update companies links.
         }
     }
 
@@ -202,7 +191,7 @@ public class GlassdoorScraper {
      * @param driver
      * @param companiesLinks List of links.
      */
-    private static void getCompaniesLinks(ChromeDriver driver,
+    private static void findCompaniesLinks(ChromeDriver driver,
                                           ArrayList companiesLinks) {
         companiesLinks.clear();
         ArrayList<WebElement> links = new ArrayList<>(driver.findElements(By.cssSelector("a[href*='Overview']")));
@@ -215,9 +204,4 @@ public class GlassdoorScraper {
         }
     }
 
-    private static void jumpToPage(ChromeDriver driver, int page) {
-        if (page != 0) {
-            driver.get("https://www.glassdoor.com/Reviews/spain-reviews-SRCH_IL.0,5_IN219_SDOR_IP" + (page+1) + ".htm");
-        }
-    }
 }

@@ -4,6 +4,8 @@ import java.io.*;
 import java.util.ArrayList;
 import java.util.Map.Entry;
 import java.util.TreeMap;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.apache.poi.xssf.usermodel.XSSFCell;
 import org.apache.poi.xssf.usermodel.XSSFRow;
 import org.apache.poi.xssf.usermodel.XSSFSheet;
@@ -43,27 +45,23 @@ public class ExcelManager {
                 workbook.write(out);
             }
             System.out.println("Fichero de datos creado satisfactoriamente");
-        } else {
-            System.out.println("El fichero de datos ya existe");
         }
     }
 
-    public int getLastRowIndex() throws FileNotFoundException, IOException {
-        FileInputStream file = new FileInputStream(new File(pathToFile));
-        XSSFWorkbook workbook = new XSSFWorkbook(file);
-        XSSFSheet spreadsheet = workbook.getSheetAt(0);
-        return (spreadsheet.getLastRowNum() + 1);
-    }
-
-    public boolean write(TreeMap<String, ArrayList<Float>> companies) throws FileNotFoundException, IOException {
-        FileInputStream fileIn = new FileInputStream(new File(pathToFile));
-        XSSFWorkbook workbook = new XSSFWorkbook(fileIn);
-        XSSFSheet sheet = workbook.getSheetAt(0);
-        int lastIndex = getLastRowIndex();
-        int numberOfCompanies = companies.size();
-        for (int i = 0; i < numberOfCompanies; i++) {
-            XSSFRow row = sheet.createRow(lastIndex);  // Create info row.
-            Entry entry = companies.pollFirstEntry();
+    public boolean save(TreeMap<String, ArrayList<Float>> data) {
+        FileInputStream fileIn = null;
+        try {
+            fileIn = new FileInputStream(new File(pathToFile));
+        } catch (FileNotFoundException ex) {
+            Logger.getLogger(ExcelManager.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        XSSFWorkbook workbook = searchWorkbook(fileIn);
+        XSSFSheet firstSheet = workbook.getSheetAt(0);
+        int lastIndex = firstSheet.getLastRowNum();
+        int numElements = data.size();
+        for (int i = 0; i < numElements; i++) {
+            XSSFRow row = firstSheet.createRow((lastIndex + 1));
+            Entry entry = data.pollFirstEntry();
             ArrayList<Float> entryValue = (ArrayList<Float>)entry.getValue();
             XSSFCell Companycell = row.createCell(0);
             Companycell.setCellValue((String)entry.getKey());
@@ -75,8 +73,34 @@ public class ExcelManager {
         }
         try (FileOutputStream fileOut = new FileOutputStream(pathToFile)) {
             workbook.write(fileOut);
+            workbook.close();
+        } catch (IOException ex) {
+            Logger.getLogger(ExcelManager.class.getName()).log(Level.SEVERE, null, ex);
         }
-        System.out.println("Fichero de datos actualizado satisfactoriamente");
         return true;
+    }
+
+    private XSSFWorkbook searchWorkbook(FileInputStream fileIn) {
+        XSSFWorkbook workbook = null;
+        try {
+            workbook = new XSSFWorkbook(fileIn);
+        } catch (IOException ex) {
+            Logger.getLogger(ExcelManager.class.getName()).log(Level.SEVERE, null, ex);
+        }
+        return workbook;
+    }
+
+    public int getLastRowNum() {
+        FileInputStream file = null;
+        try {
+            file = new FileInputStream(new File(pathToFile));
+            XSSFWorkbook workbook = searchWorkbook(file);
+            XSSFSheet firstSheet = workbook.getSheetAt(0);
+            return firstSheet.getLastRowNum();
+        } catch (FileNotFoundException ex) {
+            Logger.getLogger(ExcelManager.class.getName()).log(Level.SEVERE, null, ex);
+        } finally {
+            return -1;
+        }
     }
 }
