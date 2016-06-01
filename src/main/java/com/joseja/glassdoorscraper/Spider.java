@@ -5,7 +5,7 @@
  */
 package com.joseja.glassdoorscraper;
 
-import org.openqa.selenium.By;
+import java.util.ArrayList;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeDriver;
 
@@ -14,44 +14,72 @@ import org.openqa.selenium.chrome.ChromeDriver;
  * @author joseja
  */
 public class Spider {
-    
+
     private final ChromeDriver driver;
-    private SpiderBrain brain;
-    
+    private final SpiderBrain brain;
+
     public Spider(ChromeDriver driver) {
         this.driver = driver;
         this.brain = new SpiderBrain(driver);
     }
-    
+
     public void enterPage(String url) {
         driver.get(url);
     }
 
-    /**
-     * Go to next page.
-     *
-     * @param driver
-     */
-    static void advancePage(ChromeDriver driver) {  // TODO: Useless?¿?¿ Use jump instead
-        WebElement nextPage = driver.findElement(By.className("next"));
-        nextPage.click(); // Go to next page.
-    }
-
-    static void jumpToPage(ChromeDriver driver, int page) {
-        System.out.println("Jumping to page: " + (page + 1));
+    public void jumpToPage(ChromeDriver driver, int page) {
         if (page > 1) {
             driver.get("https://www.glassdoor.com/Reviews/spain-reviews-SRCH_IL.0,5_IN219_IP" + page + ".htm");
+        } else {
+            // Already in the first page.
         }
     }
 
     public int getTotalPages() {
-        int numCompanies = brain.findTotalPages();
+        int numCompanies = brain.scrapTotalPages();
         if (numCompanies % GlassdoorScraper.COMPANIES_PER_PAGE == 0) {
-                return numCompanies / GlassdoorScraper.COMPANIES_PER_PAGE;
+            return numCompanies / GlassdoorScraper.COMPANIES_PER_PAGE;
         } else {
             return (numCompanies / GlassdoorScraper.COMPANIES_PER_PAGE) + 1;  // Extra page.
         }
     }
-    
-    
+
+    /**
+     * Extract data from every company in the current page (10 by default).
+     *
+     * @param driver
+     * @param companyIndex
+     */
+    public void processPage(ChromeDriver driver, int companyIndex) {
+        // Get all companies links from the current page.
+        ArrayList<WebElement> links = brain.scrapCompaniesLinks();
+        for (int i = companyIndex; i < links.size(); i++) {
+            getCompanyInfo(driver, links.get(i));
+            driver.navigate().back();
+            links = brain.scrapCompaniesLinks(); // Update companies links.
+        }
+    }
+
+    private void getCompanyInfo(ChromeDriver driver, WebElement companyLink) {
+        String companyName = companyLink.getText();
+        companyLink.click(); // Enter selected company page.
+        System.out.println("Scraping Company: " + companyName);
+        Float totalReviews = brain.scrapTotalReviews(driver);
+        saveTotalReviews(companyName, totalReviews);
+        ArrayList<Float> detailedRatings = brain.scrapDetailedRatings(driver);
+        saveDetailedRatings(companyName, detailedRatings);
+    }
+
+    private void saveDetailedRatings(String companyName, ArrayList<Float> ratings) {
+        ArrayList<Float> info = GlassdoorScraper.companies.get(companyName);
+        info.addAll(ratings);
+        GlassdoorScraper.companies.put(companyName, info); // Save company ratings.
+    }
+
+    private void saveTotalReviews(String companyName, float totalReviews) {
+        ArrayList<Float> info = new ArrayList<>();
+        info.add(totalReviews);
+        GlassdoorScraper.companies.put(companyName, info);
+    }
+
 }

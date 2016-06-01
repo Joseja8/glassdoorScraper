@@ -44,7 +44,6 @@ public class ExcelManager {
             try (FileOutputStream out = new FileOutputStream(new File(pathToFile))) {
                 workbook.write(out);
             }
-            System.out.println("Fichero de datos creado satisfactoriamente");
         }
     }
 
@@ -53,6 +52,7 @@ public class ExcelManager {
         try {
             fileIn = new FileInputStream(new File(pathToFile));
         } catch (FileNotFoundException ex) {
+            System.err.println("Data file error");
             Logger.getLogger(ExcelManager.class.getName()).log(Level.SEVERE, null, ex);
         }
         XSSFWorkbook workbook = searchWorkbook(fileIn);
@@ -75,6 +75,7 @@ public class ExcelManager {
             workbook.write(fileOut);
             workbook.close();
         } catch (IOException ex) {
+            System.err.println("Error while saving data");
             Logger.getLogger(ExcelManager.class.getName()).log(Level.SEVERE, null, ex);
         }
         return true;
@@ -90,17 +91,11 @@ public class ExcelManager {
         return workbook;
     }
 
-    public int getLastRowNum() {
-        FileInputStream file = null;
-        try {
+    public int getLastRowNum() throws FileNotFoundException {
+            FileInputStream file;
             file = new FileInputStream(new File(pathToFile));
             XSSFWorkbook workbook = searchWorkbook(file);
             XSSFSheet firstSheet = workbook.getSheetAt(0);
             return firstSheet.getLastRowNum();
-        } catch (FileNotFoundException ex) {
-            Logger.getLogger(ExcelManager.class.getName()).log(Level.SEVERE, null, ex);
-        } finally {
-            return -1;
-        }
     }
 }
