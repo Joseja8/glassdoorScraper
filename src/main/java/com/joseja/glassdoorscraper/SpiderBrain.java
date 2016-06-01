@@ -7,6 +7,7 @@ package com.joseja.glassdoorscraper;
 
 import java.util.ArrayList;
 import org.openqa.selenium.By;
+import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.chrome.ChromeDriver;
 
@@ -69,52 +70,32 @@ public class SpiderBrain {
      * @return
      */
     public ArrayList<Float> scrapDetailedRatings(ChromeDriver driver) {
-        // Open detailed ratings window.
-        driver.findElement(By.cssSelector("span[href*='ratingsDetails']")).click();
+        JavascriptExecutor jse = (JavascriptExecutor)driver;
+        jse.executeScript("scroll(0, 250);");
+        WebElement ratingsDetailLink = driver.findElement(
+                By.xpath("//*[@id=\"EmpStats\"]/div/div[1]/div[2]/span[5]"));
+        ratingsDetailLink.click();
         // Scrap content.
         ArrayList<Float> ratings = new ArrayList<>();
-        ratings.add(scrapRating1(driver));
-        ratings.add(scrapRating2(driver));
-        ratings.add(scrapRating3(driver));
-        ratings.add(scrapRating4(driver));
-        ratings.add(scrapRating5(driver));
-        ratings.add(scrapRating6(driver));
+        int ratingIndex = getFirstRatingIndex();
+        for (int i = 0; i < 6; i++) {
+            ratings.add(scrapRating(driver, ratingIndex));
+            ratingIndex += 2;
+        }
         return ratings;
     }
 
-    private float scrapRating1(ChromeDriver driver) {
-        WebElement element = driver.findElement(By.id("ui-id-3"));
-        float rating = Float.parseFloat(element.findElement(By.cssSelector(".ratingNum.h1")).getText());
+    private float scrapRating(ChromeDriver driver, int index) {
+        float rating = Float.parseFloat(driver.findElement(By.xpath("//*[@id=\"ui-id-" + index + "\"]/div[1]/div[3]/span")).getText());
         return rating;
     }
 
-    private float scrapRating2(ChromeDriver driver) {
-        WebElement element = driver.findElement(By.id("ui-id-5"));
-        float rating = Float.parseFloat(element.findElement(By.className("ratingNum")).getText());
-        return rating;
-    }
-
-    private float scrapRating3(ChromeDriver driver) {
-        WebElement element = driver.findElement(By.id("ui-id-7"));
-        float rating = Float.parseFloat(element.findElement(By.className("ratingNum")).getText());
-        return rating;
-    }
-
-    private float scrapRating4(ChromeDriver driver) {
-        WebElement element = driver.findElement(By.id("ui-id-9"));
-        float rating = Float.parseFloat(element.findElement(By.className("ratingNum")).getText());
-        return rating;
-    }
-
-    private float scrapRating5(ChromeDriver driver) {
-        WebElement element = driver.findElement(By.id("ui-id-11"));
-        float rating = Float.parseFloat(element.findElement(By.className("ratingNum")).getText());
-        return rating;
-    }
-
-    private float scrapRating6(ChromeDriver driver) {
-        WebElement element = driver.findElement(By.id("ui-id-13"));
-        float rating = Float.parseFloat(element.findElement(By.className("ratingNum")).getText());
-        return rating;
+    private int getFirstRatingIndex() {
+        try {
+            driver.findElement(By.xpath("//*[@id=\"ui-id-1\"]/div[1]/div[3]/span"));
+        } catch (Exception ex) {
+            return 3;
+        }
+        return 1;
     }
 }

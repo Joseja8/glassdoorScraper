@@ -53,10 +53,12 @@ public class Spider {
     public void processPage(ChromeDriver driver, int companyIndex) {
         // Get all companies links from the current page.
         ArrayList<WebElement> links = brain.scrapCompaniesLinks();
-        for (int i = companyIndex; i < links.size(); i++) {
+        int totalLinks = links.size();
+        for (int i = companyIndex; i < totalLinks; i++) {
             getCompanyInfo(driver, links.get(i));
             driver.navigate().back();
-            links = brain.scrapCompaniesLinks(); // Update companies links.
+            driver.navigate().back();
+            //links = brain.scrapCompaniesLinks(); // Update companies links.
         }
     }
 

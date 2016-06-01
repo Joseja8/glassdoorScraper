@@ -11,6 +11,7 @@ import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.chrome.ChromeDriver;
 
 /**
@@ -29,8 +30,8 @@ public class GlassdoorScraper {
     static final int COMPANIES_PER_PAGE = 10;
 
     public static void main(String[] args) throws InterruptedException {
-        driver = initializeDriver();
-        excel = initializeExcelManager();
+        initializeDriver();
+        initializeExcelManager();
         Spider spider = new Spider(driver);
         companies = new TreeMap<>();
 
@@ -41,7 +42,6 @@ public class GlassdoorScraper {
             numPages = spider.getTotalPages();
 
             pageIndex = (excel.getLastRowNum() / COMPANIES_PER_PAGE) + 1;
-            System.out.println("PAGE_INDEX: " + pageIndex);
             companyIndex = excel.getLastRowNum() % COMPANIES_PER_PAGE;
         } catch (Exception ex) {
             Logger.getLogger(GlassdoorScraper.class.getName()).log(Level.SEVERE, null, ex);
@@ -53,9 +53,8 @@ public class GlassdoorScraper {
 
         try {
             while (pageIndex < numPages) {
-            System.out.println("Jumping page...: " + pageIndex);
                 spider.jumpToPage(driver, pageIndex);
-            System.out.println("Processing  page...: " + pageIndex);
+                System.out.println("Processing  page...: " + pageIndex);
                 spider.processPage(driver, companyIndex);
                 pageIndex++;
             }
@@ -63,7 +62,7 @@ public class GlassdoorScraper {
             Logger.getLogger(GlassdoorScraper.class.getName()).log(Level.SEVERE, null, ex);
             System.err.println("Error found (Webpage Security likely), saving and exiting");
             excel.save(companies);
-            shutdownDriver(15);
+            shutdownDriver(50);
             System.exit(0);
         }
     }
@@ -75,27 +74,25 @@ public class GlassdoorScraper {
         driver.quit();
     }
 
-    private static ChromeDriver initializeDriver() {
+    private static void initializeDriver() {
         // Set path to Chrome web driver.
         System.setProperty("webdriver.chrome.driver", "chromedriver");
-        ChromeDriver driver = new ChromeDriver();
+        driver = new ChromeDriver();
         // Set implicit wait.
         driver.manage().timeouts().implicitlyWait(15, TimeUnit.SECONDS);
-        return driver;
+        JavascriptExecutor js = ((JavascriptExecutor)driver);
+        js.executeScript("window.open('','default','width=350,height=800,top=0,left‌=0')");        driver.close();
+        driver.switchTo().window("default");
     }
 
-    private static ExcelManager initializeExcelManager() {
+    private static void initializeExcelManager() {
         ExcelManager newExcelManager = null;
         try {
-            newExcelManager = new ExcelManager("compañias");
-            return newExcelManager;
+            excel = new ExcelManager("compañias");
         } catch (IOException ex) {
-            System.err.println("Error en el modulo ExcelManager: ");
-            Logger
-                    .getLogger(GlassdoorScraper.class
-                            .getName()).log(Level.SEVERE, null, ex);
-            System.err.println("Fin del log.");
+            System.err.println("Excel Module error");
+            Logger.getLogger(GlassdoorScraper.class
+                    .getName()).log(Level.SEVERE, null, ex);
         }
-        return newExcelManager;
     }
 }
